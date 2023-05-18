@@ -12,6 +12,11 @@ import scalafix.sbt.ScalafixTestkitPlugin
 import scalafix.sbt.ScalafixTestkitPlugin.autoImport.*
 import scalafix.sbt.ScalafixPlugin
 import scalafix.sbt.ScalafixPlugin.autoImport.*
+import _root_.io.github.davidgregory084.TpolecatPlugin.autoImport.*
+import sbt.Remove.Sequence
+
+import scala.collection.GenTraversableOnce
+import scala.collection.generic.Subtractable
 
 object AsyncUtilsTwitterPlugin extends AutoPlugin {
   override def trigger = noTrigger
@@ -48,7 +53,7 @@ object AsyncUtilsTwitterPlugin extends AutoPlugin {
   private val SCALA_2_12 = "2.12.17"
   private val Scala2Versions: Seq[String] = Seq(SCALA_2_13, SCALA_2_12)
 
-  private val CatsEffect3V = "3.4.11"
+  private val CatsEffect3V = "3.5.0"
   private val CatsTaglessV: String = "0.14.0"
   private val libthriftV: String = "0.10.0"
 
@@ -92,6 +97,12 @@ object AsyncUtilsTwitterPlugin extends AutoPlugin {
       )
     }
 
+  private implicit def removeSet[T, V <: T, F[V] <: Subtractable[V, F[V]] with GenTraversableOnce[V]]: Sequence[F[T], F[V], V] =
+    new Sequence[F[T], F[V], V] {
+      override def removeValue(a: F[T], b: V): F[T] = a - b
+      override def removeValues(a: F[T], b: F[V]): F[T] = a -- b
+    }
+
   lazy val `async-utils-finagle` =
     projectMatrixForSupportedVersions("async-utils-finagle", "twitter-finagle") { v =>
       Seq(
@@ -99,8 +110,13 @@ object AsyncUtilsTwitterPlugin extends AutoPlugin {
         libraryDependencies ++= {
           Seq(
             "com.twitter" %% "finagle-thrift" % v.toString,
+            "org.apache.thrift" % "libthrift" % "0.10.0" % Test,
+            "com.twitter" %% "scrooge-core" % "22.7.0" % Test,
+            "org.typelevel" %% "cats-tagless-core" % CatsTaglessV % Test,
+            "org.typelevel" %% "cats-tagless-macros" % CatsTaglessV % Test,
           ) ++ (if (scalaVersion.value.startsWith("2")) scala2CompilerPlugins else Nil)
-        }
+        },
+        Test / tpolecatScalacOptions -= ScalacOptions.fatalWarnings,
       )
     }
       .dependsOn(`async-utils-twitter`)
